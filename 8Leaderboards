@@ -1,0 +1,29 @@
+Option Strict On
+Public Class 8Leaderboards
+
+    Private Sub BackButton_Click(sender As Object, e As EventArgs) Handles BackButton.Click
+        Me.Hide()
+        BackButton()
+    End Sub
+
+    Private Sub Form8_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Dim con As New OleDb.OleDbConnection
+        Dim ds As New DataSet
+        Dim dtLeaderboards As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        Dim cmd As New OleDb.OleDbCommand
+        Dim RecordCount As Integer
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        ds.Tables.Add(dtLeaderboards)
+        da = New OleDb.OleDbDataAdapter("SELECT * FROM Leaderboards ORDER BY Wins DESC", con)
+        da.Fill(dtLeaderboards)
+        con.Close()
+        RecordCount = dtLeaderboards.Rows.Count
+        If RecordCount > 10 Then RecordCount = 10
+        For i = 0 To RecordCount - 1
+            DataGridView1.Rows.Add(New String() {CStr(dtLeaderboards(i)(0)), CStr(CInt(dtLeaderboards(i)(1)) + CInt(dtLeaderboards(i)(2)) + CInt(dtLeaderboards(i)(3))), CStr(dtLeaderboards(i)(1)), CStr(dtLeaderboards(i)(3)), CStr(CInt(dtLeaderboards(i)(1)) / CInt(dtLeaderboards(i)(3)))})
+        Next
+    End Sub
+
+End Class
