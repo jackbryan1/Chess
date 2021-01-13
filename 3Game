@@ -1,0 +1,1604 @@
+Option Strict On
+Public Class 3Game
+
+    Dim Board(8, 8) As String
+    Dim Colours(64) As Color
+    Dim ListOfPanels As New List(Of Panel)
+    Dim ListOfPics As New List(Of PictureBox)
+    Dim Turn As Char
+    Dim LastPieceClicked As PictureBox
+    Dim TimerLength As Integer = Form2.TurnTime
+    Dim PawnHasMoved(16) As Boolean
+    Dim CanEnPassant(16) As Boolean
+    Dim CastlingHasMoved(4) As Boolean
+    Dim CastleAvailable As Boolean = False
+    Dim NumOfPiecesTakenW As Integer
+    Dim NumOfPiecesTakenB As Integer
+    Dim AlgNot(5) As String
+
+    Private Sub Form3_Load(ByVal sender As Object, ByVal e As EventArgs) Handles MyBase.Load
+        LabelP2.Text = Form2.PlayerName(0)
+        LabelP1.Text = Form2.PlayerName(1)
+        For i = 0 To 8
+            For j = 0 To 8
+                Board(i, j) = "  "
+            Next
+        Next
+        For i = 1 To 8
+            Board(i, 2) = "WP"
+            Board(i, 7) = "BP"
+        Next
+        Board(1, 1) = "WR"
+        Board(8, 1) = "WR"
+        Board(1, 8) = "BR"
+        Board(8, 8) = "BR"
+        Board(2, 1) = "WN"
+        Board(7, 1) = "WN"
+        Board(2, 8) = "BN"
+        Board(7, 8) = "BN"
+        Board(3, 1) = "WB"
+        Board(6, 1) = "WB"
+        Board(3, 8) = "BB"
+        Board(6, 8) = "BB"
+        Board(4, 1) = "WQ"
+        Board(5, 1) = "WK"
+        Board(5, 8) = "BK"
+        Board(4, 8) = "BQ"
+        For i = 1 To 16
+            PawnHasMoved(i) = False
+            CanEnPassant(i) = False
+        Next
+        For i = 1 To 64
+            ListOfPanels.Add(CType(Controls("Panel" & i), Panel))
+        Next
+        ListOfPics = FindChildren(Me)
+        ResetBoard()
+        LastPieceClicked = PictureBox11
+        Turn = CChar("W")
+        For i = 0 To 4
+            AlgNot(i) = ""
+        Next
+        If Form2.TimerBar.Value <> 0 Then
+            P1timelbl.Text = ConvertToClock(TimerLength)
+            P2timelbl.Text = ConvertToClock(TimerLength)
+            TimerPlayer1.Start()
+        End If
+    End Sub
+
+    Public Function FindChildren(ByRef StartingContainer As Control) As List(Of PictureBox)
+        Dim Children As New List(Of PictureBox)
+        Dim Control As Control
+        For Each Control In StartingContainer.Controls
+            If Control.GetType = GetType(PictureBox) Then Children.Add(CType(Control, PictureBox))
+            If Control.HasChildren Then
+                Children.AddRange(FindChildren(Control))
+            End If
+        Next
+        Return Children
+    End Function
+
+    Private Sub AIGetMoves(ByRef AIMoves(,) As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim Placeholder(0) As String
+        For Each PictureBox In ListOfPics.ToList
+            If (Turn = "B" And CInt(PictureBox.Name.Substring(10)) <= 16) Or (Turn = "W" And CInt(PictureBox.Name.Substring(10)) >= 17) Then
+                If (Turn = "B" And CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10) Or (Turn = "W" And CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26) Then
+                    PawnMovement(PictureBox, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+                If (Turn = "B" And (CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14)) Or (Turn = "W" And (CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32)) Then
+                    RookMovement(PictureBox, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+                If (Turn = "B" And (CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2)) Or (Turn = "W" And (CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18)) Then
+                    BishopMovement(PictureBox, False, Placeholder, False, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+                If (Turn = "B" And (CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12)) Or (Turn = "W" And (CInt(PictureBox.Name.Substring(10)) = 29 Or CInt(PictureBox.Name.Substring(10)) = 28)) Then
+                    KnightMovement(PictureBox, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+                If (Turn = "B" And CInt(PictureBox.Name.Substring(10)) = 16) Or (Turn = "B" And CInt(PictureBox.Name.Substring(10)) = 27) Then
+                    KingMovement(PictureBox, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+                If (Turn = "B" And CInt(PictureBox.Name.Substring(10)) = 15) Or (Turn = "W" And CInt(PictureBox.Name.Substring(10)) = 30) Then
+                    QueenMovement(PictureBox, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+                    AIMoveAdd(AIMoves, PictureBox)
+                End If
+            End If
+        Next
+    End Sub
+
+    Private Sub AIMoveAdd(ByRef AIMoves(,) As String, ByVal PictureBox As PictureBox)
+        Dim Count As Integer = 0
+        For i = 1 To 64
+            If Controls("Panel" & i).BackColor = Color.Lime Or Controls("Panel" & i).BackColor = Color.Red Then
+                Count = 0
+                If Turn = "B" Then
+                    Do Until AIMoves(CInt(PictureBox.Name.Substring(10)), Count) Is Nothing
+                        Count = Count + 1
+                    Loop
+                    AIMoves(CInt(PictureBox.Name.Substring(10)), Count) = PanelXCoordinateFinder(CType(Controls("Panel" & i), Panel)) & PanelYCoordinateFinder(CType(Controls("Panel" & i), Panel))
+                Else
+                    Do Until AIMoves(CInt(PictureBox.Name.Substring(10)) - 16, Count) Is Nothing
+                        Count = Count + 1
+                    Loop
+                    AIMoves(CInt(PictureBox.Name.Substring(10)) - 16, Count) = PanelXCoordinateFinder(CType(Controls("Panel" & i), Panel)) & PanelYCoordinateFinder(CType(Controls("Panel" & i), Panel))
+                End If
+            End If
+        Next
+        ResetBoard()
+    End Sub
+
+    Private Sub AIMove()
+        Dim Move As String = "  "
+        Dim MoveX As Integer
+        Dim MoveY As Integer
+        Dim PieceNum As Integer = 1
+        ResetBoard()
+        Move = MinimaxHome(True, Form2.AIDiff, PieceNum)
+        MoveX = Val(Move(0))
+        MoveY = Val(Move(1))
+        For i = 1 To 64
+            If FindChildren(Controls("Panel" & i)).Count > 0 Then
+                If FindChildren(Controls("Panel" & i))(0).Name.Substring(10) = CStr(PieceNum) Then
+                    LastPieceClicked = FindChildren(Controls("Panel" & i))(0)
+                End If
+            End If
+        Next
+        If FindChildren(Controls("Panel" & PanelNumberFinder(MoveX, MoveY))).Count > 0 Then Controls("Panel" & PanelNumberFinder(MoveX, MoveY)).BackColor = Color.Red Else Controls("Panel" & PanelNumberFinder(MoveX, MoveY)).BackColor = Color.Lime
+        If Controls("Panel" & PanelNumberFinder(MoveX, MoveY)).BackColor = Color.Lime Then
+            MovePiece(Controls("Panel" & PanelNumberFinder(MoveX, MoveY)), False)
+        Else
+            IntermediateStep(Controls("Panel" & PanelNumberFinder(MoveX, MoveY)), FindChildren(Controls("Panel" & PanelNumberFinder(MoveX, MoveY)))(0))
+        End If
+    End Sub
+
+    Private Function MinimaxHome(ByRef IsMaximising As Boolean, ByRef Depth As Integer, ByRef PieceNum As Integer) As String
+        Dim BestValue As Integer = -99999
+        Dim BestMoveFound As String = "  "
+        Dim MMValue As Integer
+        Dim StartBoard(8, 8) As String
+        Dim PicBox As PictureBox = PictureBox1
+        Dim AIMoves(16, 27) As String
+        For i = 1 To 8
+            For j = 1 To 8
+                StartBoard(i, j) = Board(i, j)
+            Next
+        Next
+        AIGetMoves(AIMoves, False, False)
+        For i = 0 To 16
+            For j = 0 To 27
+                If AIMoves(i, j) <> Nothing Then
+                    For Each Pic In ListOfPics
+                        If CInt(Pic.Name.Substring(10)) = i Then
+                            PicBox = Pic
+                            Exit For
+                        End If
+                    Next
+                    Board(Val(AIMoves(i, j)(0)), Val(AIMoves(i, j)(1))) = Board(PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), PanelYCoordinateFinder(CType(PicBox.Parent, Panel)))
+                    Board(PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), PanelYCoordinateFinder(CType(PicBox.Parent, Panel))) = "  "
+                    MMValue = Minimax(Not IsMaximising, Depth - 1, -9999, 9999)
+                    For a = 1 To 8
+                        For b = 1 To 8
+                            Board(a, b) = StartBoard(a, b)
+                        Next
+                    Next
+                    If MMValue > BestValue Then
+                        BestValue = MMValue
+                        BestMoveFound = AIMoves(i, j)
+                        PieceNum = i
+                    End If
+                Else Exit For
+                End If
+            Next
+        Next
+        Return BestMoveFound
+    End Function
+
+    Private Function Minimax(ByRef IsMaximising As Boolean, ByRef Depth As Integer, ByRef Alpha As Integer, ByRef Beta As Integer) As Integer
+        Dim BestScore As Integer
+        Dim StartBoard(8, 8) As String
+        Dim AIMoves2(16, 27) As String
+        Dim PicBox As PictureBox = PictureBox1
+        If Depth = 0 Then
+            For i = 1 To 8
+                For j = 1 To 8
+                    BestScore += EvaluateBoard(Board(i, j))
+                Next
+            Next
+            Return BestScore
+        End If
+        FlipBoard()
+        For i = 1 To 8
+            For j = 1 To 8
+                StartBoard(i, j) = Board(i, j)
+            Next
+        Next
+        If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+        AIGetMoves(AIMoves2, True, True)
+        If IsMaximising = True Then
+            BestScore = -9999
+            For i = 1 To 16
+                For j = 0 To 27
+                    If AIMoves2(i, j) <> Nothing Then
+                        For Each Pic In ListOfPics
+                            If CInt(Pic.Name.Substring(10)) = i Then
+                                PicBox = Pic
+                                Exit For
+                            End If
+                        Next
+                        Board(Val(AIMoves2(i, j)(0)), Val(AIMoves2(i, j)(1))) = Board(PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), PanelYCoordinateFinder(CType(PicBox.Parent, Panel)))
+                        Board(PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), PanelYCoordinateFinder(CType(PicBox.Parent, Panel))) = "  "
+                        BestScore = Math.Max(BestScore, Minimax(Not IsMaximising, Depth - 1, Alpha, Beta))
+                        Alpha = Math.Max(Alpha, BestScore)
+                        For a = 1 To 8
+                            For b = 1 To 8
+                                Board(a, b) = StartBoard(a, b)
+                            Next
+                        Next
+                    Else Exit For
+                    End If
+                Next
+            Next
+        Else
+            BestScore = 9999
+            For i = 1 To 16
+                For j = 0 To 27
+                    If AIMoves2(i, j) <> Nothing Then
+                        For Each Pic In ListOfPics
+                            If CInt(Pic.Name.Substring(10)) = i + 16 Then
+                                PicBox = Pic
+                                Exit For
+                            End If
+                        Next
+                        Board(Val(AIMoves2(i, j)(0)), Val(AIMoves2(i, j)(1))) = Board(9 - PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PicBox.Parent, Panel)))
+                        Board(9 - PanelXCoordinateFinder(CType(PicBox.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PicBox.Parent, Panel))) = "  "
+                        BestScore = Math.Min(BestScore, Minimax(Not IsMaximising, Depth - 1, Alpha, Beta))
+                        Beta = Math.Max(Beta, BestScore)
+                        For a = 1 To 8
+                            For b = 1 To 8
+                                Board(a, b) = StartBoard(a, b)
+                            Next
+                        Next
+                    Else Exit For
+                    End If
+                Next
+            Next
+        End If
+        If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+        If Alpha >= Beta Then Return BestScore
+        Return BestScore
+    End Function
+
+    Private Function EvaluateBoard(ByVal PieceType As String) As Integer
+        Select Case PieceType(1)
+            Case CChar(" ")
+                Return 0
+            Case CChar("P")
+                Return CheckIfWhite(PieceType(0), 10)
+            Case CChar("B")
+                Return CheckIfWhite(PieceType(0), 30)
+            Case CChar("N")
+                Return CheckIfWhite(PieceType(0), 30)
+            Case CChar("R")
+                Return CheckIfWhite(PieceType(0), 50)
+            Case CChar("Q")
+                Return CheckIfWhite(PieceType(0), 90)
+            Case CChar("K")
+                Return CheckIfWhite(PieceType(0), 900)
+        End Select
+        If PieceType(1) = "P" Then EvaluateBoard = 10
+        If PieceType(1) = "B" Then EvaluateBoard = 30
+        If PieceType(1) = "N" Then EvaluateBoard = 30
+        If PieceType(1) = "R" Then EvaluateBoard = 50
+        If PieceType(1) = "Q" Then EvaluateBoard = 90
+        If PieceType(1) = "K" Then EvaluateBoard = 900
+        If PieceType(0) = "W" Then EvaluateBoard = -EvaluateBoard
+        Return EvaluateBoard
+    End Function
+
+    Private Function CheckIfWhite(ByVal PieceColour As Char, ByVal PieceValue As Integer) As Integer
+        If PieceColour = "W" Then Return -PieceValue Else Return PieceValue
+    End Function
+
+    Private Sub RookCicked(sender As Object, e As EventArgs) Handles PictureBox32.Click, PictureBox31.Click, PictureBox14.Click, PictureBox13.Click
+        Dim Placeholder(0) As String
+        RookMovement(sender, False, Placeholder, False, False)
+    End Sub
+
+    Private Sub RookMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim WhichPiece As PictureBox = DirectCast(sender, PictureBox)
+        Dim Piece As New Piece
+        Dim StopLoop As Boolean = False
+        Dim Count As Integer = 1
+        If BoardFlipped = False Then
+            Piece.XCoord = PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        Else
+            Piece.XCoord = 9 - PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = 9 - PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        End If
+        For i = 17 To 26
+            If WhichPiece.Name = "PictureBox" & i Then Piece.Colour = CChar("W")
+        Next
+        If WhichPiece.Name = "PictureBox32" Or WhichPiece.Name = "PictureBox31" Or WhichPiece.Name = "PictureBox30" Then Piece.Colour = CChar("W")
+        If Piece.Colour <> "W" And WhichPiece.Name.Contains("PictureBox") Then Piece.Colour = CChar("B")
+        If Piece.Colour <> Turn Then
+            IntermediateStep(WhichPiece.Parent, WhichPiece)
+        Else
+            ResetBoard()
+            Do Until StopLoop = True Or Count = 8 Or CheckOnBoardUp(Piece.YCoord, Count) = False
+                DirectionMoveFinder(Piece, 0, Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 8 Or CheckOnBoardDown(Piece.YCoord, Count) = False
+                DirectionMoveFinder(Piece, 0, -Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 8 Or CheckOnBoardRight(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, Count, 0, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 8 Or CheckOnBoardLeft(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, -Count, 0, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+        End If
+        LastPieceClicked = CType(sender, PictureBox)
+    End Sub
+
+    Private Sub KnightClicked(sender As Object, e As EventArgs) Handles PictureBox29.Click, PictureBox28.Click, PictureBox12.Click, PictureBox11.Click
+        Dim Placeholder(1) As String
+        KnightMovement(sender, False, Placeholder, False, False)
+    End Sub
+    Private Sub KnightMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim WhichPiece As PictureBox = DirectCast(sender, PictureBox)
+        Dim Piece As New Piece
+        If BoardFlipped = False Then
+            Piece.XCoord = PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        Else
+            Piece.XCoord = 9 - PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = 9 - PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        End If
+        If WhichPiece.Name = "PictureBox28" Or WhichPiece.Name = "PictureBox29" Then Piece.Colour = CChar("W") Else Piece.Colour = CChar("B")
+        If Piece.Colour <> Turn Then
+            IntermediateStep(WhichPiece.Parent, WhichPiece)
+        Else
+            ResetBoard()
+            If CheckOnBoardUp(Piece.YCoord, 2) = True And CheckOnBoardRight(Piece.XCoord, 1) = True Then
+                DirectionMoveFinder(Piece, 1, 2, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardUp(Piece.YCoord, 1) = True And CheckOnBoardRight(Piece.XCoord, 2) = True Then
+                DirectionMoveFinder(Piece, 2, 1, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardDown(Piece.YCoord, 1) = True And CheckOnBoardRight(Piece.XCoord, 2) = True Then
+                DirectionMoveFinder(Piece, 2, -1, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardDown(Piece.YCoord, 2) = True And CheckOnBoardRight(Piece.XCoord, 1) = True Then
+                DirectionMoveFinder(Piece, 1, -2, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardDown(Piece.YCoord, 2) = True And CheckOnBoardLeft(Piece.XCoord, 1) = True Then
+                DirectionMoveFinder(Piece, -1, -2, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardDown(Piece.YCoord, 1) = True And CheckOnBoardLeft(Piece.XCoord, 2) = True Then
+                DirectionMoveFinder(Piece, -2, -1, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardUp(Piece.YCoord, 1) = True And CheckOnBoardLeft(Piece.XCoord, 2) = True Then
+                DirectionMoveFinder(Piece, -2, 1, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+            If CheckOnBoardUp(Piece.YCoord, 2) = True And CheckOnBoardLeft(Piece.XCoord, 1) = True Then
+                DirectionMoveFinder(Piece, -1, 2, False, StopInfiniteLoop)
+                CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            End If
+        End If
+        LastPieceClicked = CType(sender, PictureBox)
+    End Sub
+
+    Private Sub BishopClicked(sender As Object, e As EventArgs) Handles PictureBox18.Click, PictureBox17.Click, PictureBox2.Click, PictureBox1.Click
+        Dim Placeholder(1) As String
+        BishopMovement(sender, False, Placeholder, False, False, False)
+    End Sub
+    Private Sub BishopMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal IsQueen As Boolean, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim WhichPiece As PictureBox = DirectCast(sender, PictureBox)
+        Dim Piece As New Piece
+        Dim StopLoop As Boolean = False
+        Dim Count As Integer = 1
+        If BoardFlipped = False Then
+            Piece.XCoord = PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        Else
+            Piece.XCoord = 9 - PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = 9 - PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        End If
+        For i = 17 To 26
+            If WhichPiece.Name = "PictureBox" & i Then Piece.Colour = CChar("W")
+        Next
+        If WhichPiece.Name = "PictureBox30" Then Piece.Colour = CChar("W")
+        If Piece.Colour <> "W" And WhichPiece.Name.Contains("PictureBox") Then Piece.Colour = CChar("B")
+        If Piece.Colour <> Turn Then
+            IntermediateStep(WhichPiece.Parent, WhichPiece)
+        Else
+            If IsQueen = False Then ResetBoard()
+            Do Until StopLoop = True Or Count = 7 Or CheckOnBoardUp(Piece.YCoord, Count) = False Or CheckOnBoardRight(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, Count, Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 7 Or CheckOnBoardUp(Piece.YCoord, Count) = False Or CheckOnBoardLeft(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, -Count, Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 7 Or CheckOnBoardDown(Piece.YCoord, Count) = False Or CheckOnBoardRight(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, Count, -Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            StopLoop = False
+            Count = 1
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+            If Checkmate = True Then ResetBoard()
+            Do Until StopLoop = True Or Count = 7 Or CheckOnBoardDown(Piece.YCoord, Count) = False Or CheckOnBoardLeft(Piece.XCoord, Count) = False
+                DirectionMoveFinder(Piece, -Count, -Count, StopLoop, StopInfiniteLoop)
+                Count = Count + 1
+            Loop
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+        End If
+        LastPieceClicked = CType(sender, PictureBox)
+    End Sub
+
+    Private Sub DirectionMoveFinder(ByVal Piece As Piece, ByVal XMovement As Integer, ByVal YMovement As Integer, ByRef stoploop As Boolean, ByVal StopInfiniteLoop As Boolean)
+        If Board(Piece.XCoord + XMovement, Piece.YCoord + YMovement)(0) = Piece.Colour Then stoploop = True
+        If Board(Piece.XCoord + XMovement, Piece.YCoord + YMovement) = "  " And stoploop = False Then
+            If NotCheckingKing(Piece, XMovement, YMovement, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + XMovement, Piece.YCoord + YMovement)).BackColor = Color.Lime
+        Else
+            If Board(Piece.XCoord + XMovement, Piece.YCoord + YMovement)(0) <> Piece.Colour And Board(Piece.XCoord + XMovement, Piece.YCoord + YMovement)(0) <> "  " Then
+                If NotCheckingKing(Piece, XMovement, YMovement, StopInfiniteLoop) = False Then
+                    Controls("Panel" & PanelNumberFinder(Piece.XCoord + XMovement, Piece.YCoord + YMovement)).BackColor = Color.Red
+                    stoploop = True
+                End If
+            End If
+        End If
+    End Sub
+
+    Private Function NotCheckingKing(ByVal Piece As Piece, ByVal XDist As Integer, ByVal YDist As Integer, ByVal StopInfiniteLoop As Boolean) As Boolean
+        Dim TempBoard(8, 8) As String
+        Dim OppositeColour As Char
+        If Piece.Colour = "W" Then OppositeColour = CChar("B") Else OppositeColour = CChar("W")
+            For i = 1 To 8
+                For j = 1 To 8
+                    TempBoard(i, j) = Board(i, j)
+                Next
+            Next
+            NotCheckingKing = True
+            If StopInfiniteLoop = False Then
+                KeepColours()
+                ResetBoard()
+                Board(Piece.XCoord + XDist, Piece.YCoord + YDist) = Board(Piece.XCoord, Piece.YCoord)
+                Board(Piece.XCoord, Piece.YCoord) = "  "
+                FlipBoard()
+                Turn = OppositeColour
+                If Piece.Colour = "W" Then
+                If CheckCheck(OppositeColour, 9 - PanelXCoordinateFinder(CType(PictureBox27.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PictureBox27.Parent, Panel)), StopInfiniteLoop) = False Then
+                    NotCheckingKing = False
+                End If
+            Else
+                If CheckCheck(OppositeColour, 9 - PanelXCoordinateFinder(CType(PictureBox16.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PictureBox16.Parent, Panel)), StopInfiniteLoop) = False Then
+                    NotCheckingKing = False
+                End If
+            End If
+                Turn = Piece.Colour
+                ResetBoard()
+                FlipBoard()
+                RestoreColours()
+            Else NotCheckingKing = False
+            End If
+        For i = 1 To 8
+            For j = 1 To 8
+                Board(i, j) = TempBoard(i, j)
+            Next
+        Next
+        Return NotCheckingKing
+    End Function
+
+    Public Sub PawnClicked(sender As Object, e As EventArgs) Handles PictureBox26.Click, PictureBox25.Click, PictureBox24.Click, PictureBox23.Click, PictureBox22.Click, PictureBox21.Click, PictureBox20.Click, PictureBox19.Click, PictureBox10.Click, PictureBox9.Click, PictureBox8.Click, PictureBox7.Click, PictureBox6.Click, PictureBox5.Click, PictureBox4.Click, PictureBox3.Click
+        Dim Piece As PictureBox = CType(sender, PictureBox)
+        Dim Placeholder(0) As String
+        If Piece.Image Is PictureBox15.Image Or Piece.Image Is PictureBox30.Image Then
+            QueenMovement(sender, False, Placeholder, False, False)
+        Else
+            PawnMovement(sender, False, Placeholder, False, False)
+        End If
+    End Sub
+
+    Private Sub PawnMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim WhichPiece As PictureBox = DirectCast(sender, PictureBox)
+        Dim Piece As New Piece
+        If BoardFlipped = False Then
+            Piece.XCoord = PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        Else
+            Piece.XCoord = 9 - PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = 9 - PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        End If
+        For i = 19 To 26
+            If WhichPiece.Name = "PictureBox" & i Then Piece.Colour = CChar("W")
+        Next
+        If Piece.Colour <> "W" And WhichPiece.Name.Contains("PictureBox") Then Piece.Colour = CChar("B")
+        If Piece.Colour <> Turn Then
+            IntermediateStep(WhichPiece.Parent, WhichPiece)
+        Else
+            ResetBoard()
+            If CheckOnBoardUp(Piece.YCoord, 1) = True Then If Board(Piece.XCoord, Piece.YCoord + 1) = "  " And NotCheckingKing(Piece, 0, 1, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord, Piece.YCoord + 1)).BackColor = Color.Lime
+            If CheckOnBoardUp(Piece.YCoord, 1) = True And CheckOnBoardRight(Piece.XCoord, 1) = True Then If Board(Piece.XCoord + 1, Piece.YCoord + 1)(0) <> Piece.Colour And Board(Piece.XCoord + 1, Piece.YCoord + 1)(0) <> " " And NotCheckingKing(Piece, 1, 1, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + 1, Piece.YCoord + 1)).BackColor = Color.Red
+            If CheckOnBoardUp(Piece.YCoord, 1) = True And CheckOnBoardLeft(Piece.XCoord, 1) = True Then If Board(Piece.XCoord - 1, Piece.YCoord + 1)(0) <> Piece.Colour And Board(Piece.XCoord - 1, Piece.YCoord + 1)(0) <> " " And NotCheckingKing(Piece, -1, 1, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord - 1, Piece.YCoord + 1)).BackColor = Color.Red
+            If Piece.Colour = "W" Then If PawnHasMoved(CInt(WhichPiece.Name.Substring(10)) - 10) = False And CheckOnBoardUp(Piece.YCoord, 2) = True Then If Board(Piece.XCoord, Piece.YCoord + 2) = "  " And Board(Piece.XCoord, Piece.YCoord + 1) = "  " And NotCheckingKing(Piece, 0, 2, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord, Piece.YCoord + 2)).BackColor = Color.Lime
+            If Piece.Colour = "B" Then If PawnHasMoved(CInt(WhichPiece.Name.Substring(10)) - 2) = False And CheckOnBoardUp(Piece.YCoord, 2) = True Then If Board(Piece.XCoord, Piece.YCoord + 2) = "  " And Board(Piece.XCoord, Piece.YCoord + 1) = "  " And NotCheckingKing(Piece, 0, 2, StopInfiniteLoop) = False Then Controls("Panel" & PanelNumberFinder(Piece.XCoord, Piece.YCoord + 2)).BackColor = Color.Lime
+            If StopInfiniteLoop = False And Form2.EnPassant = True Then EnPassantMoves(WhichPiece, Piece)
+            CheckWhetherToAddMoves(Checkmate, CheckMoves, CType(WhichPiece.Parent, Panel), Piece, BoardFlipped)
+        End If
+        LastPieceClicked = CType(sender, PictureBox)
+    End Sub
+
+    Private Sub EnPassantMoves(ByVal WhichPiece As PictureBox, ByVal Piece As Piece)
+        Dim LRPawns As New List(Of PictureBox)
+        If Form2.EnPassant = True And (CInt(WhichPiece.Name.Substring(10)) >= 19 And CInt(WhichPiece.Name.Substring(10)) <= 26) Or (CInt(WhichPiece.Name.Substring(10)) >= 3 And CInt(WhichPiece.Name.Substring(10)) <= 10) Then
+            LRPawns = GetLRPawns(WhichPiece, Piece)
+            If LRPawns.Count > 0 Then
+                If CInt(LRPawns(0).Name.Substring(10)) >= 19 And CInt(LRPawns(0).Name.Substring(10)) <= 26 Then
+                    If CanEnPassant(CInt(LRPawns(0).Name.Substring(10)) - 10) = True Then
+                        If LRPawns(0).Parent.Name.Substring(5) > WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + 1, Piece.YCoord)).BackColor = Color.Red
+                        If LRPawns(0).Parent.Name.Substring(5) < WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord - 1, Piece.YCoord)).BackColor = Color.Red
+                    End If
+                End If
+                If LRPawns.Count > 1 Then
+                    If CInt(LRPawns(1).Name.Substring(10)) >= 19 And CInt(LRPawns(1).Name.Substring(10)) <= 26 Then
+                        If CanEnPassant(CInt(LRPawns(1).Name.Substring(10)) - 10) = True Then
+                            If LRPawns(1).Parent.Name.Substring(5) > WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + 1, Piece.YCoord)).BackColor = Color.Red
+                            If LRPawns(1).Parent.Name.Substring(5) < WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord - 1, Piece.YCoord)).BackColor = Color.Red
+                        End If
+                    End If
+                End If
+                If (CInt(LRPawns(0).Name.Substring(10)) >= 3 And CInt(LRPawns(0).Name.Substring(10)) <= 10) Then
+                    If CanEnPassant(CInt(LRPawns(0).Name.Substring(10)) - 2) = True Then
+                        If LRPawns(0).Parent.Name.Substring(5) > WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + 1, Piece.YCoord)).BackColor = Color.Red
+                        If LRPawns(0).Parent.Name.Substring(5) < WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord - 1, Piece.YCoord)).BackColor = Color.Red
+                    End If
+                    If LRPawns.Count > 1 Then
+                        If CInt(LRPawns(1).Name.Substring(10)) >= 3 And CInt(LRPawns(1).Name.Substring(10)) <= 10 Then
+                            If CanEnPassant(CInt(LRPawns(1).Name.Substring(10)) - 2) = True Then
+                                If LRPawns(1).Parent.Name.Substring(5) > WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord + 1, Piece.YCoord)).BackColor = Color.Red
+                                If LRPawns(1).Parent.Name.Substring(5) < WhichPiece.Parent.Name.Substring(5) Then Controls("Panel" & PanelNumberFinder(Piece.XCoord - 1, Piece.YCoord)).BackColor = Color.Red
+                            End If
+                        End If
+                    End If
+                End If
+            End If
+        End If
+    End Sub
+
+    Private Function GetLRPawns(Pic As PictureBox, Piece As Piece) As List(Of PictureBox)
+        Dim LRPawns As New List(Of PictureBox)
+        Dim StartPanelNum As Integer = CInt(Pic.Parent.Name.Substring(5))
+        If StartPanelNum - 1 >= 1 And CheckOnBoardLeft(Piece.XCoord, 1) = True Then If Board(Piece.XCoord - 1, Piece.YCoord)(1) = "P" Then LRPawns.Add(FindChildren(Controls("Panel" & StartPanelNum - 1))(0))
+        If StartPanelNum + 1 <= 64 And CheckOnBoardRight(Piece.XCoord, 1) = True Then If Board(Piece.XCoord + 1, Piece.YCoord)(1) = "P" Then LRPawns.Add(FindChildren(Controls("Panel" & StartPanelNum + 1))(0))
+        Return LRPawns
+    End Function
+
+    Private Sub KingClicked(sender As Object, e As EventArgs) Handles PictureBox27.Click, PictureBox16.Click
+        Dim Placeholder(0) As String
+        KingMovement(sender, False, Placeholder, False, False)
+    End Sub
+
+    Private Sub KingMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim WhichPiece As PictureBox = DirectCast(sender, PictureBox)
+        Dim Piece As New Piece
+        If BoardFlipped = False Then
+            Piece.XCoord = PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        Else
+            Piece.XCoord = 9 - PanelXCoordinateFinder(CType(WhichPiece.Parent, Panel))
+            Piece.YCoord = 9 - PanelYCoordinateFinder(CType(WhichPiece.Parent, Panel))
+        End If
+        If WhichPiece.Name = "PictureBox27" Then Piece.Colour = CChar("W") Else Piece.Colour = CChar("B")
+        If Piece.Colour <> Turn Then
+            IntermediateStep(WhichPiece.Parent, WhichPiece)
+        Else
+            ResetBoard()
+            If StopInfiniteLoop = False Then Castling(Piece, StopInfiniteLoop)
+            If CheckOnBoardUp(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, 0, 1, StopInfiniteLoop)
+            If CheckOnBoardDown(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, 0, -1, StopInfiniteLoop)
+            If CheckOnBoardRight(Piece.XCoord, 1) = True Then KingDirectionMoveFinder(Piece, 1, 0, StopInfiniteLoop)
+            If CheckOnBoardLeft(Piece.XCoord, 1) = True Then KingDirectionMoveFinder(Piece, -1, 0, StopInfiniteLoop)
+            If CheckOnBoardRight(Piece.XCoord, 1) = True And CheckOnBoardUp(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, 1, 1, StopInfiniteLoop)
+            If CheckOnBoardLeft(Piece.XCoord, 1) = True And CheckOnBoardUp(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, -1, 1, StopInfiniteLoop)
+            If CheckOnBoardRight(Piece.XCoord, 1) = True And CheckOnBoardDown(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, 1, -1, StopInfiniteLoop)
+            If CheckOnBoardLeft(Piece.XCoord, 1) = True And CheckOnBoardDown(Piece.YCoord, 1) = True Then KingDirectionMoveFinder(Piece, -1, -1, StopInfiniteLoop)
+            ResetBoard()
+            RestoreColours()
+        End If
+        LastPieceClicked = CType(sender, PictureBox)
+    End Sub
+
+    Private Sub KingDirectionMoveFinder(ByVal Piece As Piece, ByVal XDist As Integer, ByVal YDist As Integer, ByVal StopInfiniteLoop As Boolean)
+        Dim OppositeColour As Char
+        If Piece.Colour = "W" Then OppositeColour = CChar("B") Else OppositeColour = CChar("W")
+        If StopInfiniteLoop = False Then
+            KeepColours()
+            If Board(Piece.XCoord + XDist, Piece.YCoord + YDist) = "  " Then
+                ResetBoard()
+                FlipBoard()
+                Turn = OppositeColour
+                If CheckCheck(OppositeColour, 9 - (Piece.XCoord + XDist), 9 - (Piece.YCoord + YDist), False) = False Then
+                    ResetBoard()
+                    Controls("Panel" & PanelNumberFinder(Piece.XCoord + XDist, Piece.YCoord + YDist)).BackColor = Color.Lime
+                    RestoreColours()
+                    KeepColours()
+                End If
+                ResetBoard()
+                FlipBoard()
+            Else
+                If Board(Piece.XCoord + XDist, Piece.YCoord + YDist)(0) <> Piece.Colour Then
+                    ResetBoard()
+                    FlipBoard()
+                    Turn = OppositeColour
+                    If CheckCheck(OppositeColour, 9 - (Piece.XCoord + XDist), 9 - (Piece.YCoord + YDist), False) = False Then
+                        ResetBoard()
+                        Controls("Panel" & PanelNumberFinder(Piece.XCoord + XDist, Piece.YCoord + YDist)).BackColor = Color.Red
+                        RestoreColours()
+                        KeepColours()
+                    End If
+                    ResetBoard()
+                    FlipBoard()
+                End If
+            End If
+            Turn = Piece.Colour
+        Else
+            If Board(Piece.XCoord + XDist, Piece.YCoord + YDist) = "  " Then
+                Controls("Panel" & PanelNumberFinder(Piece.XCoord + XDist, Piece.YCoord + YDist)).BackColor = Color.Lime
+            Else
+                If Board(Piece.XCoord + XDist, Piece.YCoord + YDist)(0) <> Piece.Colour Then
+                    Controls("Panel" & PanelNumberFinder(Piece.XCoord + XDist, Piece.YCoord + YDist)).BackColor = Color.Red
+                End If
+            End If
+        End If
+        RestoreColours()
+    End Sub
+
+    Private Sub Castling(ByVal Piece As Piece, ByVal StopInfiniteLoop As Boolean)
+        If Piece.Colour = "W" And CastlingHasMoved(1) = False And Piece.XCoord = 5 And Piece.YCoord = 1 And Board(2, 1) = "  " And Board(3, 1) = "  " And Board(4, 1) = "  " Then CastlingFinder(CChar("B"), 2, 5, 6, 7, StopInfiniteLoop)
+        If Piece.Colour = "W" And CastlingHasMoved(2) = False And Piece.XCoord = 5 And Piece.YCoord = 1 And Board(6, 1) = "  " And Board(7, 1) = "  " Then CastlingFinder(CChar("B"), 7, 3, 2, 2, StopInfiniteLoop)
+        If Piece.Colour = "B" And CastlingHasMoved(3) = False And Piece.XCoord = 4 And Piece.YCoord = 1 And Board(2, 1) = "  " And Board(3, 1) = "  " Then CastlingFinder(CChar("W"), 2, 6, 7, 7, StopInfiniteLoop)
+        If Piece.Colour = "B" And CastlingHasMoved(4) = False And Piece.XCoord = 4 And Piece.YCoord = 1 And Board(5, 1) = "  " And Board(6, 1) = "  " And Board(7, 1) = "  " Then CastlingFinder(CChar("W"), 7, 4, 3, 2, StopInfiniteLoop)
+    End Sub
+    Private Sub CastlingFinder(ByVal Colour As Char, ByVal PanelNum As Integer, ByVal Num1 As Integer, ByVal Num2 As Integer, ByVal Num3 As Integer, ByVal StopInfiniteLoop As Boolean)
+        If StopInfiniteLoop = True Then
+            Controls("Panel" & PanelNum).BackColor = Color.Lime
+            CastleAvailable = True
+        Else
+            If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+            KeepColours()
+            ResetBoard()
+            FlipBoard()
+            If CheckCheck(Turn, Num1, 8, False) = False And CheckCheck(Turn, Num2, 8, False) = False And CheckCheck(Turn, Num3, 8, False) = False Then
+                FlipBoard()
+                ResetBoard()
+                Controls("Panel" & PanelNum).BackColor = Color.Lime
+                CastleAvailable = True
+                RestoreColours()
+                KeepColours()
+            Else
+                FlipBoard()
+            End If
+            Turn = CChar("W")
+        End If
+    End Sub
+
+    Private Sub QueenClicked(sender As Object, e As EventArgs) Handles PictureBox30.Click, PictureBox15.Click
+        Dim Placeholder(0) As String
+        QueenMovement(sender, False, Placeholder, False, False)
+    End Sub
+    Private Sub QueenMovement(ByVal sender As Object, ByVal Checkmate As Boolean, ByRef CheckMoves() As String, ByVal StopInfiniteLoop As Boolean, ByVal BoardFlipped As Boolean)
+        Dim Placeholder(0) As String
+        If Checkmate = False Then
+            RookMovement(sender, False, Placeholder, StopInfiniteLoop, BoardFlipped)
+            BishopMovement(sender, False, Placeholder, True, StopInfiniteLoop, BoardFlipped)
+        Else
+            RookMovement(sender, True, CheckMoves, StopInfiniteLoop, BoardFlipped)
+            BishopMovement(sender, True, CheckMoves, True, StopInfiniteLoop, BoardFlipped)
+        End If
+    End Sub
+
+    Private Sub CheckWhetherToAddMoves(Checkmate As Boolean, ByRef Checkmoves() As String, Panel As Panel, Piece As Piece, ByVal BoardFlipped As Boolean)
+        Dim Count As Integer
+        Dim AlreadyIn As Boolean = False
+        If Checkmate = True Then
+            If (BoardFlipped = False And (PictureBox16.Parent.BackColor = Color.Red Or PictureBox27.Parent.BackColor = Color.Red)) Or (BoardFlipped = True And (Controls("Panel" & PanelNumberFinder(9 - PanelXCoordinateFinder(CType(PictureBox16.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PictureBox16.Parent, Panel)))).BackColor = Color.Red Or (Controls("Panel" & PanelNumberFinder(9 - PanelXCoordinateFinder(CType(PictureBox27.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PictureBox27.Parent, Panel)))).BackColor = Color.Red))) Then
+                For i = 0 To 27
+                    If Checkmoves(i) = Piece.XCoord & Piece.YCoord Then AlreadyIn = True
+                Next
+                Do Until Checkmoves(Count) = "  "
+                    Count += 1
+                Loop
+                If AlreadyIn = False Then
+                    If BoardFlipped = False Then Checkmoves(Count) = PanelXCoordinateFinder(Panel) & PanelYCoordinateFinder(Panel) Else Checkmoves(Count) = 9 - PanelXCoordinateFinder(Panel) & 9 - PanelYCoordinateFinder(Panel)
+                End If
+                AddCheckingMoves(Checkmoves, BoardFlipped)
+            End If
+        End If
+    End Sub
+
+    Private Sub KeepColours()
+        For i = 1 To 64
+            Colours(i) = Controls("Panel" & i).BackColor
+        Next
+    End Sub
+
+    Private Sub RestoreColours()
+        For i = 1 To 64
+            If Controls("Panel" & i).BackColor <> Color.Lime Then Controls("Panel" & i).BackColor = Colours(i)
+        Next
+    End Sub
+
+    Private Function PanelNumberFinder(ByVal XCoord As Integer, ByVal YCoord As Integer) As Integer
+        Return XCoord + ((YCoord - 1) * 8)
+    End Function
+
+    Private Function PanelXCoordinateFinder(ByVal Panel As Panel) As Integer
+        PanelXCoordinateFinder = CInt(Panel.Name.Substring(5))
+        Do Until PanelXCoordinateFinder - 8 < 1
+            PanelXCoordinateFinder -= 8
+        Loop
+        Return PanelXCoordinateFinder
+    End Function
+
+    Private Function PanelYCoordinateFinder(ByVal Panel As Panel) As Integer
+        Dim Number As Integer = CInt(Panel.Name.Substring(5))
+        PanelYCoordinateFinder = 1
+        Do Until PanelYCoordinateFinder = 0
+            PanelYCoordinateFinder = Number Mod 8
+            Number = Number + 1
+        Loop
+        If (Number - 1) / 8 <= 8 Then Return CInt((Number - 1) / 8)
+    End Function
+
+    Private Function CheckOnBoardLeft(ByVal XCoord As Integer, ByVal Distance As Integer) As Boolean
+        CheckOnBoardLeft = False
+        If XCoord - Distance >= 1 Then CheckOnBoardLeft = True
+        Return CheckOnBoardLeft
+    End Function
+
+    Private Function CheckOnBoardRight(ByVal XCoord As Integer, ByVal Distance As Integer) As Boolean
+        CheckOnBoardRight = False
+        If XCoord + Distance <= 8 Then CheckOnBoardRight = True
+        Return CheckOnBoardRight
+    End Function
+
+    Private Function CheckOnBoardUp(ByVal YCoord As Integer, ByVal Distance As Integer) As Boolean
+        CheckOnBoardUp = False
+        If YCoord + Distance <= 8 Then CheckOnBoardUp = True
+        Return CheckOnBoardUp
+    End Function
+
+    Private Function CheckOnBoardDown(ByVal YCoord As Integer, ByVal Distance As Integer) As Boolean
+        CheckOnBoardDown = False
+        If YCoord - Distance >= 1 Then CheckOnBoardDown = True
+        Return CheckOnBoardDown
+    End Function
+
+    Private Sub ResetBoard()
+        For i = 0 To 6 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 1 To 7 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 9 To 15 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 8 To 14 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 16 To 22 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 17 To 23 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 25 To 31 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 24 To 30 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 32 To 38 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 33 To 39 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 41 To 47 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 40 To 46 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 48 To 54 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 49 To 55 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+        For i = 57 To 63 Step 2
+            ListOfPanels(i).BackColor = Color.Black
+        Next
+        For i = 56 To 62 Step 2
+            ListOfPanels(i).BackColor = Color.White
+        Next
+    End Sub
+
+    Private Sub IntermediateStep(sender As Object, Piece1 As PictureBox)
+        Dim Panel As Panel = CType(sender, Panel)
+        Dim PanelNum As Integer
+        Dim StopLoop As Boolean = False
+        If Panel.BackColor = Color.Red Then
+            Board(PanelXCoordinateFinder(CType(Piece1.Parent, Panel)), PanelYCoordinateFinder(CType(Piece1.Parent, Panel))) = "  "
+            If Turn = "B" Then PanelNum = 64 Else PanelNum = 80
+            Do
+                PanelNum += 1
+                If Controls("Panel" & PanelNum).HasChildren = False Then StopLoop = True
+            Loop Until StopLoop = True
+            Piece1.Height = 30
+            Piece1.Width = 25
+            Piece1.Enabled = False
+            Piece1.Parent = Controls("Panel" & PanelNum)
+            ListOfPics.Remove(Piece1)
+            If Turn = "W" Then NumOfPiecesTakenW += 1 Else NumOfPiecesTakenB += 1
+            AlgNot(1) = "x"
+        End If
+        MovePiece(sender, True)
+    End Sub
+
+    Private Sub PanelClick(sender As Object, e As EventArgs) Handles Panel1.Click, Panel2.Click, Panel3.Click, Panel4.Click, Panel5.Click, Panel6.Click, Panel7.Click, Panel8.Click, Panel9.Click, Panel10.Click, Panel11.Click, Panel12.Click, Panel13.Click, Panel14.Click, Panel15.Click, Panel16.Click, Panel17.Click, Panel18.Click, Panel19.Click, Panel20.Click, Panel21.Click, Panel22.Click, Panel23.Click, Panel24.Click, Panel25.Click, Panel26.Click, Panel27.Click, Panel28.Click, Panel29.Click, Panel30.Click, Panel31.Click, Panel32.Click, Panel33.Click, Panel34.Click, Panel35.Click, Panel36.Click, Panel37.Click, Panel38.Click, Panel39.Click, Panel40.Click, Panel41.Click, Panel42.Click, Panel43.Click, Panel44.Click, Panel45.Click, Panel46.Click, Panel47.Click, Panel48.Click, Panel49.Click, Panel50.Click, Panel51.Click, Panel52.Click, Panel53.Click, Panel54.Click, Panel55.Click, Panel56.Click, Panel57.Click, Panel58.Click, Panel59.Click, Panel60.Click, Panel61.Click, Panel62.Click, Panel63.Click, Panel64.Click
+        MovePiece(sender, True)
+    End Sub
+
+    Private Sub MovePiece(sender As Object, Reset As Boolean)
+        Dim Panel As Panel = CType(sender, Panel)
+        Dim ColourAndPiece As String
+        Dim ShowMessage As Boolean = False
+        If Panel.BackColor = Color.Lime Or Panel.BackColor = Color.Red Then
+            ColourAndPiece = Board(PanelXCoordinateFinder(CType(LastPieceClicked.Parent, Panel)), PanelYCoordinateFinder(CType(LastPieceClicked.Parent, Panel)))
+            If CastleAvailable = True And ColourAndPiece(1) = "K" And (Panel Is Panel2 Or Panel Is Panel7) Then
+                If Turn = "W" And CastlingHasMoved(1) = False And Panel.Name = "Panel2" Then
+                    PictureBox32.Parent = Panel3
+                    Board(1, 1) = "  "
+                    Board(3, 1) = "WR"
+                    AlgNot(5) = "0-0-0"
+                End If
+                If Turn = "W" And CastlingHasMoved(2) = False And Panel.Name Is "Panel7" Then
+                    PictureBox31.Parent = Panel6
+                    Board(8, 1) = "  "
+                    Board(6, 1) = "WR"
+                    AlgNot(5) = "0-0"
+                End If
+                If Turn = "B" And CastlingHasMoved(3) = False And Panel.Name Is "Panel2" Then
+                    PictureBox14.Parent = Panel3
+                    Board(1, 1) = "  "
+                    Board(3, 1) = "BR"
+                    AlgNot(5) = "0-0"
+                End If
+                If Turn = "B" And CastlingHasMoved(4) = False And Panel.Name Is "Panel7" Then
+                    PictureBox13.Parent = Panel6
+                    Board(1, 1) = "  "
+                    Board(6, 1) = "BR"
+                    AlgNot(5) = "0-0-0"
+                End If
+            End If
+            For i = 1 To 16
+                CanEnPassant(i) = False
+            Next
+            For i = 1 To 8
+                If LastPieceClicked.Name = "PictureBox" & (i + 2) Then
+                    PawnHasMoved(i) = True
+                    If CInt(Panel.Name.Substring(5)) = CInt(LastPieceClicked.Parent.Name.Substring(5)) + 16 Then CanEnPassant(i) = True
+                End If
+                If LastPieceClicked.Name = "PictureBox" & (i + 18) Then
+                    PawnHasMoved(i + 8) = True
+                    If CInt(Panel.Name.Substring(5)) = CInt(LastPieceClicked.Parent.Name.Substring(5)) + 16 Then CanEnPassant(i + 8) = True
+                End If
+            Next
+            If LastPieceClicked.Name = "PictureBox13" Then CastlingHasMoved(1) = True
+            If LastPieceClicked.Name = "PictureBox14" Then CastlingHasMoved(2) = True
+            If LastPieceClicked.Name = "PictureBox31" Then CastlingHasMoved(3) = True
+            If LastPieceClicked.Name = "PictureBox32" Then CastlingHasMoved(4) = True
+            If LastPieceClicked.Name = "PictureBox16" Then
+                CastlingHasMoved(3) = True
+                CastlingHasMoved(4) = True
+            End If
+            If LastPieceClicked.Name = "PictureBox27" Then
+                CastlingHasMoved(1) = True
+                CastlingHasMoved(2) = True
+            End If
+            CastleAvailable = False
+            Board(PanelXCoordinateFinder(CType(LastPieceClicked.Parent, Panel)), PanelYCoordinateFinder(CType(LastPieceClicked.Parent, Panel))) = "  "
+            If ColourAndPiece(1) = "P" And CInt(LastPieceClicked.Parent.Name.Substring(5)) = CInt(Panel.Name.Substring(5)) - 1 Then
+                Panel = CType(Controls("Panel" & CInt(LastPieceClicked.Parent.Name.Substring(5)) + 9), Panel)
+                AlgNot(3) = "EP"
+            End If
+            If ColourAndPiece(1) = "P" And CInt(LastPieceClicked.Parent.Name.Substring(5)) = CInt(Panel.Name.Substring(5)) + 1 Then
+                Panel = CType(Controls("Panel" & CInt(LastPieceClicked.Parent.Name.Substring(5)) + 7), Panel)
+                AlgNot(3) = "EP"
+            End If
+            Board(PanelXCoordinateFinder(Panel), PanelYCoordinateFinder(Panel)) = ColourAndPiece
+            LastPieceClicked.Parent = Panel
+            For i = 1 To 8
+                For j = 1 To 8
+                    If LastPieceClicked.Name = "PictureBox" & (i + 2) And LastPieceClicked.Parent Is Controls("Panel" & j) Then
+                        LastPieceClicked.Image = PictureBox15.Image
+                        AlgNot(3) = "Q"
+                    End If
+                Next
+                For j = 57 To 64
+                    If LastPieceClicked.Name = "PictureBox" & (i + 18) And LastPieceClicked.Parent Is Controls("Panel" & j) Then
+                        LastPieceClicked.Image = PictureBox30.Image
+                        AlgNot(3) = "Q"
+                    End If
+                Next
+            Next
+            If ColourAndPiece(1) <> "P" Then AlgNot(0) = ColourAndPiece(1) Else AlgNot(0) = ConvertCoordToFile(PanelXCoordinateFinder(CType(LastPieceClicked.Parent, Panel)))
+            AlgNot(2) = ConvertCoordToFile(PanelXCoordinateFinder(CType(LastPieceClicked.Parent, Panel))) & ConvertCoordToRank(PanelYCoordinateFinder(CType(LastPieceClicked.Parent, Panel)))
+            If ColourAndPiece(0) = "W" Then
+                If CheckCheck(ColourAndPiece(0), PanelXCoordinateFinder(CType(PictureBox16.Parent, Panel)), PanelYCoordinateFinder(CType(PictureBox16.Parent, Panel)), True) = True Then
+                    ResetBoard()
+                    AlgNot(4) = "+"
+                    ShowMessage = True
+                End If
+            Else
+                If CheckCheck(ColourAndPiece(0), PanelXCoordinateFinder(CType(PictureBox27.Parent, Panel)), PanelYCoordinateFinder(CType(PictureBox27.Parent, Panel)), True) = True Then
+                    ResetBoard()
+                    AlgNot(4) = "+"
+                    ShowMessage = True
+                End If
+            End If
+            AlgebraicNotation(ColourAndPiece)
+            ChangeTurn()
+            If Turn = "B" And Form2.AIRB.Checked = True Then AIMaster()
+        End If
+        ResetBoard()
+        If ShowMessage = True Then MessageBox.Show("Check")
+    End Sub
+
+    Private Sub AlgebraicNotation(ByVal ColourAndPiece As String)
+        If Turn = "W" Then
+            If AlgNot(5) = "" Then ListBox1.Items.Add(AlgNot(0) & AlgNot(1) & AlgNot(2) & AlgNot(3) & AlgNot(4)) Else ListBox1.Items.Add(AlgNot(5))
+        Else
+            If AlgNot(5) = "" Then ListBox2.Items.Add(AlgNot(0) & AlgNot(1) & AlgNot(2) & AlgNot(3) & AlgNot(4)) Else ListBox2.Items.Add(AlgNot(5))
+        End If
+        For i = 0 To 5
+            AlgNot(i) = ""
+        Next
+    End Sub
+
+    Private Function ConvertCoordToFile(ByVal Coord As Integer) As String
+        ConvertCoordToFile = ""
+        If Turn = "W" Then
+            If Coord = 1 Then ConvertCoordToFile = "a"
+            If Coord = 2 Then ConvertCoordToFile = "b"
+            If Coord = 3 Then ConvertCoordToFile = "c"
+            If Coord = 4 Then ConvertCoordToFile = "d"
+            If Coord = 5 Then ConvertCoordToFile = "e"
+            If Coord = 6 Then ConvertCoordToFile = "f"
+            If Coord = 7 Then ConvertCoordToFile = "g"
+            If Coord = 8 Then ConvertCoordToFile = "h"
+        Else
+            If Coord = 1 Then ConvertCoordToFile = "h"
+            If Coord = 2 Then ConvertCoordToFile = "g"
+            If Coord = 3 Then ConvertCoordToFile = "f"
+            If Coord = 4 Then ConvertCoordToFile = "e"
+            If Coord = 5 Then ConvertCoordToFile = "d"
+            If Coord = 6 Then ConvertCoordToFile = "c"
+            If Coord = 7 Then ConvertCoordToFile = "b"
+            If Coord = 8 Then ConvertCoordToFile = "a"
+        End If
+        Return ConvertCoordToFile
+    End Function
+
+    Private Function ConvertCoordToRank(ByVal Coord As Integer) As Integer
+        If Turn = "W" Then ConvertCoordToRank = Coord Else ConvertCoordToRank = 9 - Coord
+        Return ConvertCoordToRank
+    End Function
+
+    Private Function CheckCheck(Colour As Char, KingX As Integer, KingY As Integer, BotherWithCheckmate As Boolean) As Boolean
+        Dim CheckMoves(27) As String
+        Dim Count As Integer = 0
+        CheckCheck = False
+        For i = 0 To 27
+            CheckMoves(i) = "  "
+        Next
+        ResetBoard()
+        For Each PictureBox In ListOfPics.ToList
+            If (CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10) Or (CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26) Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26 Then
+                        ResetBoard()
+                        PawnMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10 Then
+                        ResetBoard()
+                        PawnMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Or CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Then
+                        ResetBoard()
+                        RookMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                        ResetBoard()
+                        RookMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Or CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Then
+                        ResetBoard()
+                        BishopMovement(PictureBox, False, CheckMoves, False, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                        ResetBoard()
+                        BishopMovement(PictureBox, False, CheckMoves, False, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Or CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Then
+                        ResetBoard()
+                        KnightMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+            If Colour = "B" Then
+                If CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                    ResetBoard()
+                    KnightMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                    CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                    If CheckCheck = True Then Exit For
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 27 Or CInt(PictureBox.Name.Substring(10)) = 16 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 27 Then
+                        ResetBoard()
+                        KingMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 16 Then
+                        ResetBoard()
+                        KingMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 30 Or CInt(PictureBox.Name.Substring(10)) = 15 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 30 Then
+                        ResetBoard()
+                        QueenMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 15 Then
+                        ResetBoard()
+                        QueenMovement(PictureBox, False, CheckMoves, True, Not BotherWithCheckmate)
+                        CheckIfInCheck(KingX, KingY, CheckMoves, CheckCheck, BotherWithCheckmate)
+                        If CheckCheck = True Then Exit For
+                    End If
+                End If
+            End If
+        Next
+        Return CheckCheck
+    End Function
+
+    Private Sub CheckIfInCheck(ByVal KingX As Integer, ByVal KingY As Integer, ByRef CheckMoves() As String, ByRef CheckCheck As Boolean, ByVal BotherWithCheckmate As Boolean)
+        If Controls("Panel" & PanelNumberFinder(KingX, KingY)).BackColor = Color.Lime Or Controls("Panel" & PanelNumberFinder(KingX, KingY)).BackColor = Color.Red Then
+            CheckCheck = True
+            If BotherWithCheckmate = True Then If CheckCheckmate(CChar("W"), CheckMoves) = True Then GameEnd()
+        End If
+    End Sub
+    Private Function CheckCheckmate(ByVal Colour As Char, ByVal CheckMoves() As String) As Boolean
+        CheckCheckmate = True
+        Dim Count As Integer = 0
+        ResetBoard()
+        FlipBoard()
+        For Each PictureBox In ListOfPics.ToList
+            If (CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10) Or (CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26) Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10 Then
+                        PawnMovement(PictureBox, True, CheckMoves, False, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26 Then
+                        PawnMovement(PictureBox, True, CheckMoves, False, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Or CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Then
+                        RookMovement(PictureBox, True, CheckMoves, False, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                        RookMovement(PictureBox, True, CheckMoves, False, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                        Count = 0
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Or CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Then
+                        BishopMovement(PictureBox, True, CheckMoves, False, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                        BishopMovement(PictureBox, True, CheckMoves, False, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Or CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Then
+                        KnightMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                        KnightMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 27 Or CInt(PictureBox.Name.Substring(10)) = 16 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 27 Then
+                        KingMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 16 Then
+                        KingMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+            End If
+            If CInt(PictureBox.Name.Substring(10)) = 30 Or CInt(PictureBox.Name.Substring(10)) = 15 Then
+                If Colour = "W" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 30 Then
+                        QueenMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+                If Colour = "B" Then
+                    If CInt(PictureBox.Name.Substring(10)) = 15 Then
+                        QueenMovement(PictureBox, True, CheckMoves, True, True)
+                        FillBoardWithMoves(Colour, CheckMoves, CheckCheckmate)
+                        If CheckCheckmate = False Then Exit For
+                    End If
+                End If
+            End If
+        Next
+        If Turn = "W" Then
+            KingMovement(PictureBox15, False, CheckMoves, CheckCheckmate, True)
+            If CanBlockCheck(CheckMoves) = True Then CheckCheckmate = False
+        End If
+        FlipBoard()
+        Return CheckCheckmate
+    End Function
+
+    Private Sub FillBoardWithMoves(ByVal Colour As Char, ByVal CheckMoves() As String, ByRef CheckCheckmate As Boolean)
+        Dim Placeholder(0) As String
+        If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+        For Each PictureBox In ListOfPics.ToList
+            If Board(PanelXCoordinateFinder(CType(PictureBox.Parent, Panel)), PanelYCoordinateFinder(CType(PictureBox.Parent, Panel)))(0) <> Colour Then
+                If (CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10) Or (CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26) Then
+                    If Colour = "W" Then
+                        If CInt(PictureBox.Name.Substring(10)) >= 3 And CInt(PictureBox.Name.Substring(10)) <= 10 Then
+                            PawnMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                    If Colour = "B" Then
+                        If CInt(PictureBox.Name.Substring(10)) >= 19 And CInt(PictureBox.Name.Substring(10)) <= 26 Then
+                            PawnMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                End If
+                If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Or CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                    If Colour = "B" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 31 Or CInt(PictureBox.Name.Substring(10)) = 32 Then
+                            RookMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                    If Colour = "W" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 13 Or CInt(PictureBox.Name.Substring(10)) = 14 Then
+                            RookMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                End If
+                If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Or CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                    If Colour = "B" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 17 Or CInt(PictureBox.Name.Substring(10)) = 18 Then
+                            BishopMovement(PictureBox, False, Placeholder, False, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                    If Colour = "W" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 1 Or CInt(PictureBox.Name.Substring(10)) = 2 Then
+                            BishopMovement(PictureBox, False, Placeholder, False, True, True)
+                            KeepColours()
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                End If
+                If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Or CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                    If Colour = "B" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 28 Or CInt(PictureBox.Name.Substring(10)) = 29 Then
+                            KnightMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                    If Colour = "W" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 11 Or CInt(PictureBox.Name.Substring(10)) = 12 Then
+                            KnightMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then
+                                CheckCheckmate = False
+                                Exit For
+                            End If
+                        End If
+                    End If
+                End If
+                If CInt(PictureBox.Name.Substring(10)) = 30 Or CInt(PictureBox.Name.Substring(10)) = 15 Then
+                    If Colour = "B" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 30 Then
+                            BishopMovement(PictureBox, False, Placeholder, False, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then CheckCheckmate = False
+                            RookMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then CheckCheckmate = False
+                        End If
+                    End If
+                    If Colour = "W" Then
+                        If CInt(PictureBox.Name.Substring(10)) = 15 Then
+                            BishopMovement(PictureBox, False, Placeholder, False, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then CheckCheckmate = False
+                            RookMovement(PictureBox, False, Placeholder, True, True)
+                            If CanBlockCheck(CheckMoves) = True Then CheckCheckmate = False
+                        End If
+                    End If
+                End If
+            End If
+        Next
+        If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+    End Sub
+
+    Private Function CanBlockCheck(ByVal CheckMoves() As String) As Boolean
+        Dim ListOfBlockingSquares As New List(Of String)
+        For i = 1 To 64
+            If Controls("Panel" & i).BackColor = Color.Lime Or Controls("Panel" & i).BackColor = Color.Red Then ListOfBlockingSquares.Add(PanelXCoordinateFinder(CType(Controls("Panel" & i), Panel)) & PanelYCoordinateFinder(CType(Controls("Panel" & i), Panel)))
+        Next
+        CanBlockCheck = False
+        For Each Square In ListOfBlockingSquares
+            For i = 0 To 27
+                If CheckMoves(i) <> "  " Then
+                    If CheckMoves(i) = Square Then CanBlockCheck = True
+                End If
+            Next
+        Next
+        Return CanBlockCheck
+    End Function
+
+    Private Sub AddCheckingMoves(ByRef CheckMoves() As String, ByVal BoardFlipped As Boolean)
+        Dim Count As Integer = 0
+        Dim AlreadyIn As Boolean
+        For i = 1 To 64
+            AlreadyIn = False
+            If Controls("Panel" & i).BackColor = Color.Lime Or Controls("Panel" & i).BackColor = Color.Red Then
+                For j = 0 To 27
+                    If CheckMoves(j) = PanelXCoordinateFinder(CType(Controls("Panel" & i), Panel)) & PanelYCoordinateFinder(CType(Controls("Panel" & i), Panel)) Then AlreadyIn = True
+                Next
+                Do Until CheckMoves(Count) = "  "
+                    Count += 1
+                Loop
+                If AlreadyIn = False Then CheckMoves(Count) = PanelXCoordinateFinder(CType(Controls("Panel" & i), Panel)) & PanelYCoordinateFinder(CType(Controls("Panel" & i), Panel))
+            End If
+        Next
+        ResetBoard()
+    End Sub
+
+    Private Sub Timer1_Tick(sender As Object, e As EventArgs) Handles Timer1.Tick
+        TimerLength = TimerLength - 1
+        P1Timelbl.Text = ConvertToClock(TimerLength)
+        If TimerLength = 0 Then
+            TimerPlayer1.Stop()
+            Turn = CChar("B")
+            GameEnd()
+        End If
+    End Sub
+
+    Private Sub TimerPlayer2_Tick(sender As Object, e As EventArgs) Handles TimerPlayer2.Tick
+        TimerLength = TimerLength - 1
+        P2timelbl.Text = ConvertToClock(TimerLength)
+        If TimerLength = 0 Then
+            TimerPlayer2.Stop()
+            Turn = CChar("W")
+            GameEnd()
+        End If
+    End Sub
+
+    Private Function ConvertToClock(ByVal TurnTime As Integer) As String
+        Return TimeSpan.FromSeconds(TurnTime).ToString
+    End Function
+
+    Private Sub ChangeTurn()
+        Dim TempName As String
+        FlipBoard()
+        For Each PictureBox In ListOfPics
+            PictureBox.Parent = Controls("Panel" & PanelNumberFinder(9 - PanelXCoordinateFinder(CType(PictureBox.Parent, Panel)), 9 - PanelYCoordinateFinder(CType(PictureBox.Parent, Panel))))
+        Next
+        TempName = LabelP1.Text
+        LabelP1.Text = LabelP2.Text
+        LabelP2.Text = TempName
+        If Turn = "W" Then
+            Turn = CChar("B")
+            If TimerLength <> 0 Then
+                If Form2.TurnTime <> 0 Then
+                    TimerPlayer1.Stop()
+                    TimerLength = Form2.TurnTime
+                    P2timelbl.Text = ConvertToClock(TimerLength)
+                    TimerPlayer2.Start()
+                End If
+            End If
+        Else
+            Turn = CChar("W")
+            If TimerLength <> 0 Then
+                TimerPlayer2.Stop()
+                TimerLength = Form2.TurnTime
+                P1timelbl.Text = ConvertToClock(TimerLength)
+                TimerPlayer1.Start()
+            End If
+        End If
+    End Sub
+    Private Sub FlipBoard()
+        Dim TempBoard(8, 8) As String
+        For i = 1 To 8
+            For j = 1 To 8
+                TempBoard(9 - i, 9 - j) = "  "
+                TempBoard(9 - i, 9 - j) = Board(i, j)
+            Next
+        Next
+        For i = 1 To 8
+            For j = 1 To 8
+                Board(i, j) = TempBoard(i, j)
+            Next
+        Next
+    End Sub
+    Private Sub GameEnd()
+        TimerP1.Stop()
+        TimerP2.Stop()
+        UpdateDatabaseEnd()
+        If Turn = "W" Then
+            MessageBox.Show("White wins")
+        Else
+            MessageBox.Show("Black wins")
+        End If
+        Hide()
+        Form1.Show()
+    End Sub
+
+    Private Sub UpdateDatabaseEnd()
+        Dim con As New OleDb.OleDbConnection
+        Dim ds As New DataSet
+        Dim dtLeaderboards As New DataTable
+        Dim dtStatistics As New DataTable
+        Dim dtResults As New DataTable
+        Dim dtGameID As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        Dim cmd As New OleDb.OleDbCommand
+        Dim RowNumW As Integer
+        Dim RowNumB As Integer
+        Dim GameID As Integer
+        ds.Tables.Add(dtLeaderboards)
+        ds.Tables.Add(dtStatistics)
+        ds.Tables.Add(dtResults)
+        ds.Tables.Add(dtGameID)
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        cmd = New OleDb.OleDbCommand("SELECT * FROM Leaderboards WHERE Username = [Label1] OR Username = [Label2]", con)
+        cmd.Parameters.AddWithValue("Label1", Label1.Text)
+        cmd.Parameters.AddWithValue("Label2", Label2.Text)
+        da.SelectCommand = cmd
+        da.Fill(dtLeaderboards)
+        cmd = New OleDb.OleDbCommand("SELECT * FROM Statistics WHERE Username = [Label1] OR Username = [Label2]", con)
+        cmd.Parameters.AddWithValue("Label1", Label1.Text)
+        cmd.Parameters.AddWithValue("Label2", Label2.Text)
+        da.SelectCommand = cmd
+        da.Fill(dtStatistics)
+        cmd = New OleDb.OleDbCommand("SELECT GameID FROM [Recent Results] ORDER BY GameID DESC", con)
+        da.SelectCommand = cmd
+        da.Fill(dtGameID)
+        GameID = CInt(dtGameID.Rows(0)(0)) + 1
+        cmd = New OleDb.OleDbCommand("INSERT INTO [Recent Results]([User1], [User2], [Result], [GameID]) VALUES(?,?,?,?)", con)
+        cmd.Parameters.AddWithValue("User1", Label1.Text)
+        cmd.Parameters.AddWithValue("User2", Label2.Text)
+        If Turn = "W" Then cmd.Parameters.AddWithValue("Result", "W") Else cmd.Parameters.AddWithValue("Result", "L")
+        cmd.Parameters.AddWithValue("GameID", GameID)
+        da.SelectCommand = cmd
+        da.Fill(dtResults)
+        For i = 0 To 1
+            If CStr(dtStatistics.Rows(i)(0)) = Label1.Text Then
+                If Turn = "W" Then
+                    dtStatistics.Rows(i)(1) = CInt(dtStatistics.Rows(i)(1)) + NumOfPiecesTakenB
+                    dtStatistics.Rows(i)(2) = CInt(dtStatistics.Rows(i)(2)) + NumOfPiecesTakenW
+                Else
+                    dtStatistics.Rows(i)(2) = CInt(dtStatistics.Rows(i)(2)) + NumOfPiecesTakenB
+                    dtStatistics.Rows(i)(1) = CInt(dtStatistics.Rows(i)(1)) + NumOfPiecesTakenW
+                End If
+                cmd = New OleDb.OleDbCommand("UPDATE [Statistics] SET [Pieces Taken] = @PiecesTaken, [Pieces Lost] = @PiecesLost WHERE [Username] = @Username", con)
+                cmd.Parameters.AddWithValue("@PiecesTaken", dtStatistics.Rows(i)(1))
+                cmd.Parameters.AddWithValue("@PiecesLost", dtStatistics.Rows(i)(2))
+                If Turn = "B" Then cmd.Parameters.AddWithValue("@Username", Label1.Text) Else cmd.Parameters.AddWithValue("@Username", Label2.Text)
+                da.SelectCommand = cmd
+                da.Fill(dtStatistics)
+                cmd = New OleDb.OleDbCommand("UPDATE [Statistics] SET [Pieces Taken] = @PiecesTaken, [Pieces Lost] = @PiecesLost WHERE [Username] = @Username", con)
+                cmd.Parameters.AddWithValue("@PiecesTaken", dtStatistics.Rows(i)(2))
+                cmd.Parameters.AddWithValue("@PiecesLost", dtStatistics.Rows(i)(1))
+                If Turn = "B" Then cmd.Parameters.AddWithValue("@Username", Label2.Text) Else cmd.Parameters.AddWithValue("@Username", Label1.Text)
+                da.SelectCommand = cmd
+                da.Fill(dtStatistics)
+            End If
+        Next
+        If CStr(dtLeaderboards(0)(0)) = Label2.Text Then
+            RowNumW = 0
+            RowNumB = 1
+        Else
+            RowNumW = 1
+            RowNumB = 0
+        End If
+        If Turn = "W" Then
+            dtLeaderboards.Rows(RowNumW)(1) = CInt(dtLeaderboards.Rows(RowNumW)(1)) + 1
+            dtLeaderboards.Rows(RowNumB)(3) = CInt(dtLeaderboards.Rows(RowNumB)(3)) + 1
+        Else
+            dtLeaderboards.Rows(RowNumB)(1) = CInt(dtLeaderboards.Rows(RowNumB)(1)) + 1
+            dtLeaderboards.Rows(RowNumW)(3) = CInt(dtLeaderboards.Rows(RowNumW)(3)) + 1
+        End If
+        cmd = New OleDb.OleDbCommand("UPDATE [Leaderboards] SET [Wins] = @Wins WHERE [Username] = @Username", con)
+        If Turn = "W" Then
+            cmd.Parameters.AddWithValue("@Wins", dtLeaderboards.Rows(RowNumW)(1))
+            cmd.Parameters.AddWithValue("@Username", Label2.Text)
+        Else
+            cmd.Parameters.AddWithValue("@Wins", dtLeaderboards.Rows(RowNumB)(1))
+            cmd.Parameters.AddWithValue("@Username", Label1.Text)
+        End If
+        da.SelectCommand = cmd
+        da.Fill(dtLeaderboards)
+        cmd = New OleDb.OleDbCommand("UPDATE [Leaderboards] SET [Losses] = @Losses WHERE [Username] = @Username", con)
+        If Turn = "W" Then
+            cmd.Parameters.AddWithValue("@Losses", dtLeaderboards.Rows(RowNumB)(3))
+            cmd.Parameters.AddWithValue("@Username", Label1.Text)
+        Else
+            cmd.Parameters.AddWithValue("@Losses", dtLeaderboards.Rows(RowNumW)(3))
+            cmd.Parameters.AddWithValue("@Username", Label2.Text)
+        End If
+        da.SelectCommand = cmd
+        da.Fill(dtLeaderboards)
+        con.Close()
+    End Sub
+
+    Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
+        If Turn = "W" Then Turn = CChar("B") Else Turn = CChar("W")
+        GameEnd()
+    End Sub
+End Class
