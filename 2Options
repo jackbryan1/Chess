@@ -1,0 +1,112 @@
+Option Strict On
+Public Class 2Options
+
+    Public GameType As Integer = 2
+    Public AIDiff As Integer = 2
+    Public PlayerName(1) As String
+    Public EnPassant As Boolean = False
+    Public TurnTime As Integer = 60
+    Dim AddIt As Boolean = False
+
+    Private Sub Form2_Load(ByVal sender As Object, ByVal e As EventArgs) Handles MyBase.Load
+        Dim RecordCount As Integer
+        Dim con As New OleDb.OleDbConnection
+        Dim ds As New DataSet
+        Dim dt As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        ds.Tables.Add(dt)
+        da = New OleDb.OleDbDataAdapter("SELECT Username FROM Login", con)
+        da.Fill(dt)
+        con.Close()
+        For Each table As DataTable In ds.Tables
+            RecordCount += table.Rows.Count
+        Next
+        For i = 0 To RecordCount - 1
+            ComboBoxPlayer1.Items.Add(dt.Rows(i)(0))
+            ComboBoxPlayer2.Items.Add(dt.Rows(i)(0))
+        Next
+        PlayerName(0) = ""
+        PlayerName(1) = ""
+    End Sub
+    Private Sub BackButton_Click(ByVal sender As Object, ByVal e As EventArgs) Handles BackButton1.Click
+        Hide()
+        BackButton()
+    End Sub
+
+    Private Sub PlayButton_Click(ByVal sender As Object, ByVal e As EventArgs) Handles PlayButton.Click
+        If PlayerName(0) <> "" And PlayerName(1) <> "" And PlayerName(0) <> PlayerName(1) Then
+            Hide()
+            3Game.Show()
+        Else MessageBox.Show("Both profiles must be selected and unique")
+        End If
+    End Sub
+
+    Private Sub GameType1_CheckedChanged(ByVal sender As Object, ByVal e As EventArgs) Handles GameType1.CheckedChanged
+        GameType = 1
+        AIDiffBar.Enabled = True
+        ComboBoxPlayer2.Enabled = False
+        ComboBoxPlayer2.Text = "AI"
+        PlayerName(1) = ComboBoxPlayer2.Text
+    End Sub
+
+    Private Sub GameTypeButton2_CheckedChanged(ByVal sender As Object, ByVal e As EventArgs) Handles GameTypeButton2.CheckedChanged
+        GameType = 2
+        AIDiffBar.Enabled = False
+        ComboBoxPlayer2.Enabled = True
+        ComboBoxPlayer2.Text = ""
+        PlayerName(1) = ""
+    End Sub
+
+    Private Sub AIDiffBar_Scroll(ByVal sender As Object, ByVal e As EventArgs) Handles AIDiffBar.Scroll
+        AIDiff = AIDiffBar.Value
+    End Sub
+
+    Private Sub ComboBox_SelectionChangeCommitted(ByVal sender As Object, ByVal e As EventArgs) Handles ComboBoxPlayer1.SelectionChangeCommitted, ComboBoxPlayer2.SelectionChangeCommitted
+        Dim con As New OleDb.OleDbConnection
+        Dim ds As New DataSet
+        Dim dt As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        Dim cmd As New OleDb.OleDbCommand
+        Dim CBNum As Integer = Val(CType(sender, ComboBox).Name(14))
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        ds.Tables.Add(dt)
+        cmd = New OleDb.OleDbCommand("SELECT Password, [Password Required] FROM Login WHERE Username = [Player1]", con)
+        cmd.Parameters.AddWithValue("Player1", CType(Controls("ComboBoxPlayer" & CBNum), ComboBox).SelectedItem)
+        da.SelectCommand = cmd
+        da.Fill(dt)
+        con.Close()
+        If CBool(dt.Rows(0)(1)) = True Then
+            If CStr(MD5Hash(InputBox("Please enter the password"))) <> CStr(dt.Rows(0)(0)) Then
+                CType(Controls("ComboBoxPlayer" & CBNum), ComboBox).SelectedItem = ""
+                AddIt = False
+            Else
+                AddIt = True
+            End If
+        Else
+            AddIt = True
+        End If
+    End Sub
+
+    Private Sub ComboBox_SelectedIndexChanged(ByVal sender As Object, ByVal e As EventArgs) Handles ComboBoxPlayer1.SelectedIndexChanged, ComboBoxPlayer2.SelectedIndexChanged
+        Dim CBNum As Integer = Val(CType(sender, ComboBox).Name(14))
+        If AddIt = True Then PlayerName(CBNum - 1) = CStr(CType(Controls("ComboBoxPlayer" & CBNum), ComboBox).SelectedItem) Else CType(Controls("ComboBoxPlayer" & CBNum), ComboBox).SelectedText = ""
+    End Sub
+
+    Private Sub EPCB_CheckedChanged(sender As Object, e As EventArgs) Handles EPCB.CheckedChanged
+        If EPCB.Checked = True Then EnPassant = True Else EnPassant = False
+    End Sub
+
+    Private Sub TurnTimerBar_Scroll(ByVal sender As Object, ByVal e As EventArgs) Handles TurnTimerBar.Scroll
+        If TurnTimerBar.Value = 0 Then TurnTime = 0
+        If TurnTimerBar.Value = 1 Then TurnTime = 10
+        If TurnTimerBar.Value = 2 Then TurnTime = 30
+        If TurnTimerBar.Value = 3 Then TurnTime = 60
+        If TurnTimerBar.Value = 4 Then TurnTime = 120
+        If TurnTimerBar.Value = 5 Then TurnTime = 180
+        If TurnTimerBar.Value = 6 Then TurnTime = 300
+    End Sub
+
+End Class
