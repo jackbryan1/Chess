@@ -1,0 +1,34 @@
+Imports System.Text.RegularExpressions
+Public Class 5Create
+    Private Sub ButtonBack_Click(ByVal sender As Object, ByVal e As EventArgs) Handles ButtonBack.Click
+        Me.Hide()
+        BackButton()
+    End Sub
+
+    Private Sub ButtonCreate_Click(ByVal sender As Object, ByVal e As EventArgs) Handles ButtonCreate.Click
+        Dim Regex As Regex = New Regex("(?=.*[A-Z])(?=.*[a-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}")
+        Dim Match As Match = Regex.Match(TextBox2.Text)
+        If Match.Success = True Then AddAccount() Else MessageBox.Show("Password is not strong enough")
+    End Sub
+
+    Private Sub AddAccount()
+        Dim con As New OleDb.OleDbConnection
+        Dim cmd As OleDb.OleDbCommand
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        cmd = New OleDb.OleDbCommand("INSERT INTO Login([Username],[Password],[Password Required]) Values (?,?,?)", con)
+        cmd.Parameters.Add(New OleDb.OleDbParameter("Username", TextBox1.Text))
+        cmd.Parameters.Add(New OleDb.OleDbParameter("Password", MD5Hash(TextBox2.Text)))
+        cmd.Parameters.Add(New OleDb.OleDbParameter("Password Required", CheckBox1.Checked))
+        cmd.ExecuteNonQuery()
+        cmd = New OleDb.OleDbCommand("INSERT INTO Leaderboards([Username],[Wins],[Draws],[Losses]) Values (?,0,0,0)", con)
+        cmd.Parameters.Add(New OleDb.OleDbParameter("Username", TextBox1.Text))
+        cmd.ExecuteNonQuery()
+        cmd = New OleDb.OleDbCommand("INSERT INTO Statistics([Username],[Pieces Taken],[Pieces Lost]) Values (?,0,0)", con)
+        cmd.Parameters.Add(New OleDb.OleDbParameter("Username", TextBox1.Text))
+        cmd.ExecuteNonQuery()
+        cmd.Dispose()
+        con.Close()
+    End Sub
+
+End Class
