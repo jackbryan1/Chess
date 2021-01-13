@@ -1,0 +1,5 @@
+Public Class Piece
+    Public XCoord As Integer
+    Public YCoord As Integer
+    Public Colour As Char
+End Class
