@@ -1,0 +1,47 @@
+Option Strict On
+Public Class 6Login
+
+    Dim RealPassword As String
+    Public Username As String
+
+    Private Sub Form6_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        TextBox1.Clear()
+        TextBox2.Clear()
+    End Sub
+
+    Private Sub Button2_Click(sender As Object, e As EventArgs) Handles Button2.Click
+        Dim HashedPassword As String
+        Dim RecordCount As Integer
+        Dim Match As Boolean
+        Dim con As New OleDb.OleDbConnection
+        Dim ds As New DataSet
+        Dim dt As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        Username = TextBox1.Text
+        HashedPassword = MD5Hash(TextBox2.Text)
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        ds.Tables.Add(dt)
+        da = New OleDb.OleDbDataAdapter("SELECT Username, Password FROM Login", con)
+        da.Fill(dt)
+        con.Close()
+        For Each table As DataTable In ds.Tables
+            RecordCount += table.Rows.Count
+        Next
+        For i = 0 To RecordCount - 1
+            If Username = CStr(dt.Rows(i)(0)) And HashedPassword = CStr(dt.Rows(i)(1)) Then Match = True
+        Next
+        If Match = True Then
+            Hide()
+            7Stats.Show()
+            StackPush(6)
+        Else
+            MessageBox.Show("Username or password is incorrect")
+        End If
+    End Sub
+
+    Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
+        Me.Hide()
+        BackButton()
+    End Sub
+End Class
