@@ -1,0 +1,52 @@
+Option Strict On
+Public Class 7Stats
+
+    Private Sub Form7_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Dim con As New OleDb.OleDbConnection
+        Dim cmd As OleDb.OleDbCommand
+        Dim ds As New DataSet
+        Dim dtLeaderboards As New DataTable
+        Dim dtStatistics As New DataTable
+        Dim dtResults As New DataTable
+        Dim da As New OleDb.OleDbDataAdapter
+        Dim RecordCount As Integer
+        Dim WDL As Char
+        con.ConnectionString = "PROVIDER=Microsoft.Jet.OLEDB.4.0;" & "Data Source = " & Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) & "/ChessDatabase.mdb"
+        con.Open()
+        ds.Tables.Add(dtLeaderboards)
+        ds.Tables.Add(dtStatistics)
+        ds.Tables.Add(dtResults)
+        cmd = New OleDb.OleDbCommand("SELECT * FROM Leaderboards WHERE Username = [Name]", con)
+        cmd.Parameters.AddWithValue("Name", Form6.Username)
+        da.SelectCommand = cmd
+        da.Fill(dtLeaderboards)
+        cmd = New OleDb.OleDbCommand("SELECT * FROM Statistics WHERE Username = [Name]", con)
+        cmd.Parameters.AddWithValue("Name", Form6.Username)
+        da.SelectCommand = cmd
+        da.Fill(dtStatistics)
+        cmd = New OleDb.OleDbCommand("SELECT * FROM [Recent Results] WHERE User1 = [Name] OR User2 = [Name] ORDER BY GameID DESC", con)
+        cmd.Parameters.AddWithValue("Name", Form6.Username)
+        da.SelectCommand = cmd
+        da.Fill(dtResults)
+        con.Close()
+        Label1.Text = Form6.Username & "'s Statistics"
+        TextBox1.Text = CStr(dtLeaderboards(0)(1))
+        TextBox2.Text = CStr(dtLeaderboards(0)(2))
+        TextBox3.Text = CStr(dtLeaderboards(0)(3))
+        TextBox4.Text = CStr(dtStatistics(0)(1))
+        TextBox5.Text = CStr(dtStatistics(0)(2))
+        RecordCount = dtResults.Rows.Count
+        If RecordCount > 5 Then RecordCount = 5
+        For i = 0 To RecordCount - 1
+            If (CStr(dtResults.Rows(i)(0)) = Form6.Username And CStr(dtResults.Rows(i)(2)) = "W") Or (CStr(dtResults.Rows(i)(1)) = Form6.Username And CStr(dtResults.Rows(i)(2)) = "L") Then WDL = CChar("L") Else WDL = CChar("W")
+            If CStr(dtResults.Rows(i)(2)) = "D" Then WDL = CChar("D")
+            ListBox1.Items.Add("(" & WDL & ") " & CStr(dtResults.Rows(i)(0)) & " vs " & CStr(dtResults.Rows(i)(1)))
+        Next
+    End Sub
+
+    Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
+        Me.Hide()
+        BackButton()
+    End Sub
+
+End Class
