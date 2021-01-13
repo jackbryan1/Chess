@@ -1,0 +1,25 @@
+Public Class Home
+
+    Private Sub GameButton_Click(sender As Object, e As EventArgs) Handles GameButton.Click
+        Hide()
+        2Options.Show()
+        StackPush(1)
+    End Sub
+
+    Private Sub ProfButton_Click(sender As Object, e As EventArgs) Handles ProfButton.Click
+        Hide()
+        4ProfChoice.Show()
+        StackPush(1)
+    End Sub
+
+    Private Sub LBButton_Click(sender As Object, e As EventArgs) Handles LBButton.Click
+        Hide()
+        8Leaderboards.Show()
+        StackPush(1)
+    End Sub
+
+    Private Sub ExitButton_Click(sender As Object, e As EventArgs) Handles ExitButton.Click
+        End
+    End Sub
+
+End Class
