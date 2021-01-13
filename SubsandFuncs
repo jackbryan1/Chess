@@ -1,0 +1,50 @@
+Option Strict On
+Imports System.Security.Cryptography
+Imports System.Text
+Public Module SubsandFuncs
+    Dim Stack1(4) As Integer
+    Dim SP As Integer = 1
+    Public Sub BackButton()
+        Select Case StackPop()
+            Case 1
+                1Home.Show()
+            Case 2
+                2Options.Show()
+            Case 3
+                3Game.Show()
+            Case 4
+                4ProfChoice.Show()
+            Case 5
+                5Create.Show()
+            Case 6
+                6Login.Show()
+            Case 7
+                7Stats.Show()
+            Case 8
+                8Leaderboards.Show()
+        End Select
+    End Sub
+
+    Public Sub StackPush(ByVal Num As Integer)
+        SP = SP + 1
+        Stack1(SP) = Num
+    End Sub
+
+    Private Function StackPop() As Integer
+        StackPop = Stack1(SP)
+        SP = SP - 1
+        Return StackPop
+    End Function
+
+    Public Function MD5Hash(ByVal Input As String) As String
+        Using hasher As MD5 = MD5.Create()
+            Dim dbytes As Byte() = hasher.ComputeHash(Encoding.UTF8.GetBytes(Input))
+            Dim StringBuilder As New StringBuilder()
+            For n As Integer = 0 To dbytes.Length - 1
+                StringBuilder.Append(dbytes(n).ToString("X2"))
+            Next
+            Return StringBuilder.ToString()
+        End Using
+    End Function
+
+End Module
